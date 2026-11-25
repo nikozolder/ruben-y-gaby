@@ -40,10 +40,11 @@
   --ease:cubic-bezier(.22,1,.36,1);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;overflow-x:hidden;overflow-x:clip}
+main,section,footer{overflow-x:clip}
 html.lenis,html.lenis body{height:auto}
 .lenis.lenis-smooth{scroll-behavior:auto!important}
-body{background:var(--crema);color:var(--texto);font-family:'Jost',sans-serif;font-weight:300;line-height:1.7;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+body{background:var(--crema);color:var(--texto);font-family:'Jost',sans-serif;font-weight:300;line-height:1.7;overflow-x:hidden;overflow-x:clip;max-width:100vw;-webkit-font-smoothing:antialiased}
 body.locked{overflow:hidden;height:100svh}
 img{max-width:100%;display:block}
 h1,h2,h3{font-family:'Cormorant Garamond',serif;font-weight:400;color:var(--verde)}
@@ -168,7 +169,7 @@ section{position:relative;padding:110px 22px}
 .stop.right .tx{text-align:left;transform:translate(18px,-50%)}
 .stop.left .tx{text-align:right;transform:translate(-18px,-50%)}
 .stop.on .tx{opacity:1;transform:translate(0,-50%)}
-#walker{position:absolute;left:0;top:0;width:22px;height:22px;margin:-11px 0 0 -11px;color:var(--vino);z-index:2;pointer-events:none}
+#walker{position:absolute;left:0;top:0;will-change:transform;transition:opacity .4s;width:22px;height:22px;margin:-11px 0 0 -11px;color:var(--vino);z-index:2;pointer-events:none}
 .pin{text-align:center;margin-top:10px}
 .pin .ic{width:46px;margin:0 auto 6px;color:var(--vino);display:block}
 .pin p{font-family:'Cormorant Garamond';font-size:1.15rem;letter-spacing:.08em}
@@ -177,8 +178,9 @@ section{position:relative;padding:110px 22px}
 
 /* ============ GALERÍA (horizontal) ============ */
 .gal{background:var(--papel);padding:0;overflow:hidden}
-.gal-pin{height:100svh;display:flex;flex-direction:column;justify-content:center}
+.gal-pin{height:100svh;width:100%;overflow:hidden;touch-action:pan-y;display:flex;flex-direction:column;justify-content:center}
 .gal-head{text-align:center;padding:0 20px 28px}
+@media (hover:hover){.gal-pin{cursor:grab}.gal-pin.drag{cursor:grabbing;user-select:none}}
 .track{display:flex;align-items:flex-start;gap:18px;padding:0 9vw;will-change:transform;width:max-content}
 .shot{flex:0 0 auto;width:min(64vw,320px);aspect-ratio:3/4.2;overflow:hidden;position:relative;border-radius:3px;box-shadow:0 20px 40px -24px rgba(0,0,0,.5)}
 .shot:nth-child(odd){border-radius:999px 999px 3px 3px}
@@ -714,7 +716,7 @@ footer.pie a{color:var(--rosa);display:inline-block;margin-top:34px;font-family:
 if('scrollRestoration' in history) history.scrollRestoration='manual';
 window.scrollTo(0,0);
 addEventListener('load',()=>window.scrollTo(0,0));
-addEventListener('pageshow',()=>window.scrollTo(0,0));
+addEventListener('pageshow',e=>{ if(e.persisted){ location.reload(); return; } window.scrollTo(0,0); });   // si vuelve desde el historial, recarga para mostrar el sobre
 addEventListener('beforeunload',()=>window.scrollTo(0,0));
 /* ===================== CONFIGURACIÓN ===================== */
 const BODA = {
@@ -986,17 +988,23 @@ function buildMap(){
     for(let k=0;k<30;k++){ const mid=(lo+hi)/2; route.getPointAtLength(mid).y<ty?lo=mid:hi=mid; }
     return lo/routeLen;
   });
+  // tabla de puntos precalculada (evita getPointAtLength en cada frame)
+  const N=600; ptsLUT=new Float32Array((N+1)*2);
+  for(let i=0;i<=N;i++){ const q=route.getPointAtLength(routeLen*Math.min(i/N,.999)); ptsLUT[i*2]=q.x; ptsLUT[i*2+1]=q.y; }
+  stopEls=[...mapEl.querySelectorAll('.stop')]; stopOn=stopEls.map(()=>null); arrowOn=null; walkOn=null;
   setRoute(reduce?1:lastP);
 }
+let ptsLUT, stopEls=[], stopOn=[], arrowOn=null, walkOn=null;
 function setRoute(p){
   lastP=p;
   if(!route) return;
-  route.style.strokeDashoffset=routeLen*(1-p);
-  const pt=route.getPointAtLength(routeLen*Math.min(p,.999));
-  walker.style.transform=`translate(${pt.x}px,${pt.y}px)`;
-  walker.style.opacity = p>0.005 && p<0.99 ? 1 : 0;
-  arrow.style.opacity = p>0.985?1:0;
-  mapEl.querySelectorAll('.stop').forEach((s,i)=>s.classList.toggle('on',p>=stopFracs[i]-0.01));
+  route.style.strokeDashoffset=(routeLen*(1-p)).toFixed(2);
+  const N=(ptsLUT.length/2)-1, f=Math.max(0,Math.min(1,p))*N, i=Math.min(N-1,Math.floor(f)), k=f-i;
+  const x=ptsLUT[i*2]+(ptsLUT[i*2+2]-ptsLUT[i*2])*k, y=ptsLUT[i*2+1]+(ptsLUT[i*2+3]-ptsLUT[i*2+1])*k;
+  walker.style.transform=`translate3d(${x.toFixed(2)}px,${y.toFixed(2)}px,0)`;
+  const w=p>0.005&&p<0.99; if(w!==walkOn){ walkOn=w; walker.style.opacity=w?1:0; }
+  const a=p>0.985; if(a!==arrowOn){ arrowOn=a; arrow.style.opacity=a?1:0; }
+  stopEls.forEach((s,j)=>{ const on=p>=stopFracs[j]-0.01; if(on!==stopOn[j]){ stopOn[j]=on; s.classList.toggle('on',on); } });
 }
 buildMap();
 
@@ -1031,7 +1039,7 @@ function openEnvelope(){
     // 2) apertura suave como antes: el sobre se acerca y sube con calma
     .to('#intro',{scale:1.08,duration:1.2,ease:'power2.inOut'},0)
     .to('#intro',{yPercent:-100,duration:1.2,ease:'expo.inOut'},.55)
-    .add(()=>{ document.body.classList.remove('locked'); $('#intro').style.display='none'; lenis&&lenis.start(); ScrollTrigger.refresh(); })
+    .add(()=>{ document.body.classList.remove('locked'); $('#intro').style.display='none'; lenis&&(lenis.resize(),lenis.start()); ScrollTrigger.refresh(); })
     .to('.hero .frame',{y:0,opacity:1,duration:1.4,ease:'expo.out'},'-=.55')
     .to('.hero .card',{y:0,opacity:1,duration:1.4,ease:'expo.out'},'-=1.2')
     .to('.hero .tag',{y:0,opacity:1,duration:1.2,ease:'expo.out'},'-=1')
@@ -1065,7 +1073,7 @@ document.querySelectorAll('.wa').forEach(a=>{
 });
 $('#seal').addEventListener('click',openEnvelope);
 $('#openBtn').addEventListener('click',openEnvelope);
-if(reduce){ opened=true; document.body.classList.remove('locked'); $('#intro').style.display='none'; gsap.set('.hero [data-h],.hero .flores',{y:0,x:0,rotation:0,opacity:1}); }
+// el sitio SIEMPRE abre en el sobre (también con 'reducir movimiento' activado)
 
 // Parallax del hero
 gsap.to('.hero .frame',{yPercent:-6,rotation:-3,ease:'none',scrollTrigger:{trigger:'.hero',start:'top top',end:'bottom top',scrub:true}});
@@ -1098,13 +1106,41 @@ if(!reduce){
 }
 
 // Mapa: el camino se dibuja con el scroll
-ScrollTrigger.create({trigger:'#map',start:'top 65%',end:'bottom 60%',scrub:.8,onUpdate:s=>setRoute(s.progress)});
+// suavizado propio (sin el retraso del scrub): sigue el scroll con un leve easing por frame
+{ let target=0, actual=0, vivo=false;
+  const tick=()=>{ actual+=(target-actual)*0.22; if(Math.abs(target-actual)<0.0005){ actual=target; vivo=false; gsap.ticker.remove(tick); } setRoute(actual); };
+  ScrollTrigger.create({trigger:'#map',start:'top 65%',end:'bottom 60%',onUpdate:s=>{ target=s.progress; if(!vivo){ vivo=true; gsap.ticker.add(tick); } }}); }
 
 // Galería horizontal
 const track=$('#track');
 const dist=()=>Math.max(0,track.scrollWidth-innerWidth);
 const galTween=gsap.to(track,{x:()=>-dist(),ease:'none',
   scrollTrigger:{trigger:'.gal',start:'top top',end:()=>'+='+dist(),pin:'.gal-pin',scrub:.8,invalidateOnRefresh:true}});
+// Galería: también se puede deslizar de lado (dedo, trackpad o arrastrando con el mouse)
+(()=>{
+  const pin=$('.gal-pin'), st=galTween.scrollTrigger;
+  const cur=()=>lenis&&lenis.isScrolling?lenis.targetScroll:window.scrollY;
+  const go=(y,imm)=>{ y=Math.max(st.start,Math.min(st.end,y)); if(lenis&&!lenis.isScrolling){ lenis.animatedScroll=lenis.targetScroll=window.scrollY; } lenis?lenis.scrollTo(y,{immediate:imm,force:true}):window.scrollTo(0,y); };
+  const dentro=()=>{ const y=window.scrollY; return y>=st.start-2&&y<=st.end+2; };
+  // touch
+  let x0=0,y0=0,eje=null,base=0;
+  pin.addEventListener('touchstart',e=>{ const t=e.touches[0]; x0=t.clientX; y0=t.clientY; eje=null; base=window.scrollY; },{passive:true});
+  pin.addEventListener('touchmove',e=>{
+    const t=e.touches[0], dx=t.clientX-x0, dy=t.clientY-y0;
+    if(!eje && Math.hypot(dx,dy)>8) eje=Math.abs(dx)>Math.abs(dy)&&dentro()?'x':'y';
+    if(eje==='x'){ e.preventDefault(); window.scrollTo(0,Math.max(st.start,Math.min(st.end,base-dx*1.15))); }
+  },{passive:false});
+  // trackpad / rueda horizontal
+  pin.addEventListener('wheel',e=>{
+    if(Math.abs(e.deltaX)>Math.abs(e.deltaY) && dentro()){ e.preventDefault(); e.stopPropagation(); go(cur()+e.deltaX,false); }
+  },{passive:false,capture:true});
+  // arrastrar con el mouse
+  let drag=null;
+  pin.addEventListener('pointerdown',e=>{ if(e.pointerType!=='mouse'||!dentro()) return; drag={x:e.clientX,b:cur()}; pin.classList.add('drag'); });
+  addEventListener('pointermove',e=>{ if(drag) go(drag.b-(e.clientX-drag.x)*1.15,false); });
+  addEventListener('pointerup',()=>{ drag=null; pin.classList.remove('drag'); });
+  pin.addEventListener('dragstart',e=>e.preventDefault());
+})();
 document.querySelectorAll('.shot .in').forEach(el=>{
   gsap.fromTo(el,{xPercent:5},{xPercent:-5,ease:'none',scrollTrigger:{trigger:el.parentElement,containerAnimation:galTween,start:'left right',end:'right left',scrub:true}});
 });
