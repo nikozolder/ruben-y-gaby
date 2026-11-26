@@ -439,6 +439,8 @@ footer.pie .pie-preg .wa{display:inline;margin:0;font-size:inherit;color:var(--r
 #vidIntro .skip{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(22px,env(safe-area-inset-bottom));padding:11px 20px;border-radius:999px;
   border:1px solid rgba(246,240,228,.45);background:rgba(20,22,14,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#F6F0E4;
   font:400 .66rem 'Jost',sans-serif;letter-spacing:.3em;text-transform:uppercase;cursor:pointer}
+@media (max-width:480px){#vidIntro .skip{letter-spacing:.14em;padding:10px 14px;font-size:.62rem}}
+#vidIntro .skip.full{right:auto;left:max(18px,env(safe-area-inset-left));display:flex;align-items:center;gap:9px}
 #vidIntro .vi-play{position:absolute;inset:0;margin:auto;width:84px;height:84px;border-radius:50%;border:1px solid rgba(246,240,228,.7);background:rgba(255,255,255,.08);
   backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;cursor:pointer}
 #vidIntro .vi-play::before{content:"";border-left:18px solid #F6F0E4;border-top:11px solid transparent;border-bottom:11px solid transparent;margin-left:6px}
@@ -523,6 +525,7 @@ footer.pie a{color:var(--rosa);display:inline-block;margin-top:34px;font-family:
 <div id="vidIntro" aria-label="Video de Ruben y Gaby">
   <video id="viVideo" playsinline preload="auto" src="video/video-720.mp4" poster="video/portada.jpg"></video>
   <button class="vi-play" id="viPlay" aria-label="Reproducir video"></button>
+  <button class="skip full" id="viFull"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>Pantalla completa</button>
   <button class="skip" id="viSkip">Saltar video ›</button>
   <div class="bar" id="viBar"></div>
 </div>
@@ -1075,6 +1078,7 @@ function iniciarVideo(){
 }
 function cerrarVideo(){
   if(!videoOn) return; videoOn=false;
+  try{ if(document.fullscreenElement) document.exitFullscreen(); else if(viV.webkitDisplayingFullscreen) viV.webkitExitFullscreen(); }catch(_){}
   gsap.to(vi,{opacity:0,duration:.9,ease:'power2.inOut',onComplete:()=>{ viV.pause(); vi.classList.remove('on'); }});
   gsap.delayedCall(.35,revelarFecha);
 }
@@ -1092,6 +1096,17 @@ viV.addEventListener('error',()=>{ if(videoOn) cerrarVideo(); });
 viV.addEventListener('timeupdate',()=>{ if(viV.duration) gsap.to('#viBar',{scaleX:viV.currentTime/viV.duration,duration:.3,ease:'none',overwrite:true}); });
 viV.addEventListener('playing',()=>vi.classList.remove('paused'));
 $('#viSkip').addEventListener('click',cerrarVideo);
+// pantalla completa (en celular gira solo a horizontal cuando se puede)
+$('#viFull').addEventListener('click',()=>{
+  if(viV.paused) viV.play().catch(()=>{});
+  const fs=viV.requestFullscreen||viV.webkitRequestFullscreen;
+  if(fs){ const r=fs.call(viV); if(r&&r.then) r.then(()=>{ try{ screen.orientation.lock('landscape').catch(()=>{}); }catch(_){} }).catch(()=>{ viV.webkitEnterFullscreen&&viV.webkitEnterFullscreen(); }); }
+  else if(viV.webkitEnterFullscreen) viV.webkitEnterFullscreen();   // iPhone
+});
+// al salir de pantalla completa sigue sonando (iPhone a veces lo pausa)
+const seguir=()=>{ try{ screen.orientation.unlock(); }catch(_){} if(videoOn&&viV.paused&&!viV.ended) viV.play().catch(()=>vi.classList.add('paused')); };
+viV.addEventListener('webkitendfullscreen',seguir);
+document.addEventListener('fullscreenchange',()=>{ if(!document.fullscreenElement) seguir(); });
 $('#viPlay').addEventListener('click',()=>{ viV.play().catch(()=>{}); });
 viV.addEventListener('click',()=>{ if(viV.paused) viV.play().catch(()=>{}); else { viV.pause(); vi.classList.add('paused'); } });
 // volver al sobre principal: el sobre baja, se cierra y queda listo para abrirse otra vez
