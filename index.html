@@ -1115,7 +1115,7 @@ if(!reduce){
 const track=$('#track');
 const dist=()=>Math.max(0,track.scrollWidth-innerWidth);
 const galTween=gsap.to(track,{x:()=>-dist(),ease:'none',
-  scrollTrigger:{trigger:'.gal',start:'top top',end:()=>'+='+dist(),pin:'.gal-pin',scrub:.8,invalidateOnRefresh:true}});
+  scrollTrigger:{trigger:'.gal',start:'top top',end:()=>'+='+dist(),pin:'.gal-pin',scrub:.35,invalidateOnRefresh:true}});
 // Galería: también se puede deslizar de lado (dedo, trackpad o arrastrando con el mouse)
 (()=>{
   const pin=$('.gal-pin'), st=galTween.scrollTrigger;
@@ -1123,13 +1123,24 @@ const galTween=gsap.to(track,{x:()=>-dist(),ease:'none',
   const go=(y,imm)=>{ y=Math.max(st.start,Math.min(st.end,y)); if(lenis&&!lenis.isScrolling){ lenis.animatedScroll=lenis.targetScroll=window.scrollY; } lenis?lenis.scrollTo(y,{immediate:imm,force:true}):window.scrollTo(0,y); };
   const dentro=()=>{ const y=window.scrollY; return y>=st.start-2&&y<=st.end+2; };
   // touch
-  let x0=0,y0=0,eje=null,base=0;
-  pin.addEventListener('touchstart',e=>{ const t=e.touches[0]; x0=t.clientX; y0=t.clientY; eje=null; base=window.scrollY; },{passive:true});
+  // el dedo mueve las fotos más rápido (x2.4) y al soltar siguen con inercia
+  const K=2.4, clamp=y=>Math.max(st.start,Math.min(st.end,y));
+  let x0=0,y0=0,eje=null,base=0,lx=0,lt=0,vel=0,fling=null;
+  pin.addEventListener('touchstart',e=>{ const t=e.touches[0]; x0=lx=t.clientX; y0=t.clientY; lt=performance.now(); vel=0; eje=null; base=window.scrollY; fling&&fling.kill(); },{passive:true});
   pin.addEventListener('touchmove',e=>{
     const t=e.touches[0], dx=t.clientX-x0, dy=t.clientY-y0;
     if(!eje && Math.hypot(dx,dy)>8) eje=Math.abs(dx)>Math.abs(dy)&&dentro()?'x':'y';
-    if(eje==='x'){ e.preventDefault(); window.scrollTo(0,Math.max(st.start,Math.min(st.end,base-dx*1.15))); }
+    if(eje==='x'){
+      e.preventDefault();
+      const now=performance.now(), dt=Math.max(1,now-lt); vel=vel*.3+((t.clientX-lx)/dt)*.7; lx=t.clientX; lt=now;
+      window.scrollTo(0,clamp(base-dx*K));
+    }
   },{passive:false});
+  pin.addEventListener('touchend',()=>{
+    if(eje!=='x'||Math.abs(vel)<.15) return;
+    const o={y:window.scrollY}, to=clamp(o.y-vel*K*320);
+    fling=gsap.to(o,{y:to,duration:.9,ease:'power3.out',onUpdate:()=>window.scrollTo(0,o.y)});
+  },{passive:true});
   // trackpad / rueda horizontal
   pin.addEventListener('wheel',e=>{
     if(Math.abs(e.deltaX)>Math.abs(e.deltaY) && dentro()){ e.preventDefault(); e.stopPropagation(); go(cur()+e.deltaX,false); }
