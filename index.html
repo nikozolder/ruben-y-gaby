@@ -432,6 +432,18 @@ body{background:var(--papel)}
 footer.pie .pie-preg{text-wrap:balance;line-height:1.9}
 footer.pie .pie-preg .wa{display:inline;margin:0;font-size:inherit;color:var(--rosa);text-decoration:underline;text-underline-offset:4px;text-decoration-thickness:1px}
 
+/* video al abrir la invitación */
+#vidIntro{position:fixed;inset:0;z-index:99;background:#23261A;display:none;align-items:center;justify-content:center}
+#vidIntro.on{display:flex}
+#vidIntro video{width:100%;height:100%;object-fit:contain;background:#23261A}
+#vidIntro .skip{position:absolute;right:max(18px,env(safe-area-inset-right));bottom:max(22px,env(safe-area-inset-bottom));padding:11px 20px;border-radius:999px;
+  border:1px solid rgba(246,240,228,.45);background:rgba(20,22,14,.45);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#F6F0E4;
+  font:400 .66rem 'Jost',sans-serif;letter-spacing:.3em;text-transform:uppercase;cursor:pointer}
+#vidIntro .vi-play{position:absolute;inset:0;margin:auto;width:84px;height:84px;border-radius:50%;border:1px solid rgba(246,240,228,.7);background:rgba(255,255,255,.08);
+  backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;cursor:pointer}
+#vidIntro .vi-play::before{content:"";border-left:18px solid #F6F0E4;border-top:11px solid transparent;border-bottom:11px solid transparent;margin-left:6px}
+#vidIntro.paused .vi-play{display:flex}
+#vidIntro .bar{position:absolute;left:0;bottom:0;height:2px;width:100%;background:rgba(107,29,39,.9);transform-origin:left;transform:scaleX(0)}
 /* footer con foto */
 footer.pie{position:relative;text-align:center;color:var(--rosa);min-height:max(115svh,760px);padding:80px 24px 0;
   background:linear-gradient(rgba(35,38,24,.9) 0%,rgba(35,38,24,.7) 38%,rgba(35,38,24,.15) 62%,rgba(35,38,24,.25) 100%),url('fotos/footer.jpg') center bottom/cover}
@@ -506,6 +518,13 @@ footer.pie a{color:var(--rosa);display:inline-block;margin-top:34px;font-family:
   </div>
   <div id="seal" role="button" aria-label="Abrir la invitación"><span class="pulse"></span><svg class="sealSvg" viewBox="0 0 140 150"></svg></div>
   <div class="open"><button id="openBtn">Abrir la invitación<span></span></button></div>
+</div>
+
+<div id="vidIntro" aria-label="Video de Ruben y Gaby">
+  <video id="viVideo" playsinline preload="auto" src="video/video-720.mp4" poster="video/portada.jpg"></video>
+  <button class="vi-play" id="viPlay" aria-label="Reproducir video"></button>
+  <button class="skip" id="viSkip">Saltar video ›</button>
+  <div class="bar" id="viBar"></div>
 </div>
 
 <main id="site">
@@ -728,7 +747,7 @@ const BODA = {
 };
 /* VIDEO: pega aquí un link de YouTube, Vimeo o Google Drive, o la ruta de un archivo (ej. 'video/video.mp4') */
 const VIDEO = {
-  src: 'video/video.mp4',  // vacío = muestra "Video muy pronto"
+  src: 'video/video-720.mp4',  // vacío = muestra "Video muy pronto"
   formato: 'horizontal',     // 'vertical' (9:16, celular) u 'horizontal' (16:9)
   portada: 'video/portada.jpg' // opcional: imagen de portada, ej. 'fotos/video-portada.jpg'
 };
@@ -1039,12 +1058,42 @@ function openEnvelope(){
     // 2) apertura suave como antes: el sobre se acerca y sube con calma
     .to('#intro',{scale:1.08,duration:1.2,ease:'power2.inOut'},0)
     .to('#intro',{yPercent:-100,duration:1.2,ease:'expo.inOut'},.55)
-    .add(()=>{ document.body.classList.remove('locked'); $('#intro').style.display='none'; lenis&&(lenis.resize(),lenis.start()); ScrollTrigger.refresh(); })
-    .to('.hero .frame',{y:0,opacity:1,duration:1.4,ease:'expo.out'},'-=.55')
-    .to('.hero .card',{y:0,opacity:1,duration:1.4,ease:'expo.out'},'-=1.2')
-    .to('.hero .tag',{y:0,opacity:1,duration:1.2,ease:'expo.out'},'-=1')
-    .to('.hero .flores',{opacity:1,x:0,rotation:0,duration:1.4,ease:'expo.out'},'-=1');
+    .add(()=>{ $('#intro').style.display='none'; if(!videoOn) revelarFecha(); });
+  // 3) el video arranca con el mismo toque (así el celular deja que suene) y el sobre se levanta encima de él
+  iniciarVideo();
 }
+/* ---- video de apertura: suena al abrir; al terminar (o al saltarlo) se revela la fecha ---- */
+const vi=$('#vidIntro'), viV=$('#viVideo');
+let videoOn=false, revelado=false;
+function iniciarVideo(){
+  if(!VIDEO.src||viV.error){ return; }
+  videoOn=true; revelado=false; vi.classList.add('on'); vi.classList.remove('paused');
+  gsap.set(vi,{opacity:1}); gsap.set('#viBar',{scaleX:0});
+  try{ viV.currentTime=0; }catch(_){}
+  viV.muted=false;
+  const pr=viV.play(); if(pr&&pr.catch) pr.catch(()=>vi.classList.add('paused'));
+}
+function cerrarVideo(){
+  if(!videoOn) return; videoOn=false;
+  gsap.to(vi,{opacity:0,duration:.9,ease:'power2.inOut',onComplete:()=>{ viV.pause(); vi.classList.remove('on'); }});
+  gsap.delayedCall(.35,revelarFecha);
+}
+function revelarFecha(){
+  if(revelado) return; revelado=true;
+  document.body.classList.remove('locked'); lenis&&(lenis.resize(),lenis.start()); ScrollTrigger.refresh();
+  gsap.timeline()
+    .to('.hero .frame',{y:0,opacity:1,duration:1.4,ease:'expo.out'},0)
+    .to('.hero .card',{y:0,opacity:1,duration:1.4,ease:'expo.out'},.2)
+    .to('.hero .tag',{y:0,opacity:1,duration:1.2,ease:'expo.out'},.45)
+    .to('.hero .flores',{opacity:1,x:0,rotation:0,duration:1.4,ease:'expo.out'},.45);
+}
+viV.addEventListener('ended',cerrarVideo);
+viV.addEventListener('error',()=>{ if(videoOn) cerrarVideo(); });
+viV.addEventListener('timeupdate',()=>{ if(viV.duration) gsap.to('#viBar',{scaleX:viV.currentTime/viV.duration,duration:.3,ease:'none',overwrite:true}); });
+viV.addEventListener('playing',()=>vi.classList.remove('paused'));
+$('#viSkip').addEventListener('click',cerrarVideo);
+$('#viPlay').addEventListener('click',()=>{ viV.play().catch(()=>{}); });
+viV.addEventListener('click',()=>{ if(viV.paused) viV.play().catch(()=>{}); else { viV.pause(); vi.classList.add('paused'); } });
 // volver al sobre principal: el sobre baja, se cierra y queda listo para abrirse otra vez
 function closeEnvelope(e){
   e&&e.preventDefault();
@@ -1060,7 +1109,7 @@ function closeEnvelope(e){
       document.body.classList.add('locked');
       gsap.set('.hero [data-h]',{y:160,opacity:0});
       gsap.set('.hero .flores',{opacity:0,x:40,rotation:6});
-      opened=false;
+      opened=false; revelado=false;
     })
     .to('#intro .txt, #intro .open',{opacity:1,y:0,duration:.8,stagger:.1,ease:'expo.out'})
     .to('#seal .pulse',{opacity:1,duration:.3},'<');
